@@ -22,3 +22,4 @@ sleep 3
 #sleep 2
 
 exec ros2 launch mobile_robot sim_slam_v2.launch.py
+#test git
