@@ -19,10 +19,23 @@ SENSOR_HEIGHT = {
     'us_bot_right':   0.12 + WHEEL_RADIUS,
 }
 
+SENSOR_Y_OFFSET = {
+    'us_top_left':       0.17,
+    'us_top_right':     -0.17,
+    'us_mid_1_left':     0.17,
+    'us_mid_1_right':   -0.17,
+    'us_mid_2_left':     0.17,
+    'us_mid_2_right':   -0.17,
+    'us_bot_left':       0.17,
+    'us_bot_right':     -0.17,
+}
+
 class Ultrasonic3DMapNode(Node):
 
     SENSOR_X_OFFSET      = 0.35   # m — offset sensor từ base_footprint
+    LIDAR_X_OFFSET       = 0.257   # m — offset lidar từ base_footprint
     LIDAR_Z_OFFSET       = 0.075  # m — offset lidar từ base_footprint 
+
 
     def __init__(self):
         super().__init__('ultrasonic_3d_map_node')
@@ -54,27 +67,28 @@ class Ultrasonic3DMapNode(Node):
     #  ── Lidar callback ─────────────────────────────────────────────
     def lidar_callback(self, msg):
         for i, dist in enumerate(msg.ranges):
-            if math.isinf(dist) or math.isnan(dist):
+            if math.isinf(dist) or math.isnan(dist) or dist < msg.range_min or dist > msg.range_max:
                 continue
 
             # calculate the position of the point in 3D space based on the lidar scan data
             angle = msg.angle_min + i * msg.angle_increment
-            x = dist * math.cos(angle)
-            y = dist * math.sin(angle)
+            x = -(dist * math.cos(angle)) + self.LIDAR_X_OFFSET
+            y = -(dist * math.sin(angle))
             z = self.LIDAR_Z_OFFSET
             self.points.append((x, y, z))
 
     # ── Ultrasonic sensors callback ───────────────────────────────────────────────────────
     def _range_cb(self, msg: Range, name: str):
+        dist = msg.range
+        if math.isinf(dist) or math.isnan(dist) or dist < msg.min_range or dist > msg.max_range:
+            return
+
         spread = 8
         angle = self.sensor_angles[name]
-        dist = msg.range
-
-        # calculate the position of the point in 3D space based on the ultrasonic sensor data
-        for offset in range(-spread, spread+1):
-            a = angle + math.radians(offset * (15.0 / spread));
+        for offset in range(-spread, spread + 1):
+            a = angle + math.radians(offset * (15.0 / spread))
             x = dist * math.cos(a) + self.SENSOR_X_OFFSET
-            y = dist * math.sin(a)
+            y = dist * math.sin(a) + SENSOR_Y_OFFSET[name]
             z = SENSOR_HEIGHT[name]
             self.points.append((x, y, z))
 

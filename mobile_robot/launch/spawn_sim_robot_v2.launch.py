@@ -98,6 +98,16 @@ def generate_launch_description():
         parameters=[{'use_sim_time': use_sim_time}]
     )
 
+    # ====================== OCTOMAP SERVER ======================
+    octomap_server = Node(
+        package='octomap_server',
+        executable='octomap_server_node',
+        name='octomap_server',
+        output='screen',
+        parameters=[{'frame_id': 'base_footprint'}],
+        remappings=[('/cloud_in', '/ultrasonic_pointcloud')]
+    )
+
     # ====================== Spawn Entity (ros_gz_sim create) ======================
     spawn_entity = Node(
         package='ros_gz_sim',
@@ -112,9 +122,10 @@ def generate_launch_description():
     )
 
     delayed_spawn_entity      = TimerAction(period=5.0, actions=[spawn_entity])
-    delayed_filter            = TimerAction(period=15.0, actions=[scan_filter])
-    delayed_ultrasonic_fusion = TimerAction(period=17.0, actions=[ultrasonic_fusion])
-    delayed_ultrasonic_3d_map = TimerAction(period=19.0, actions=[ultrasonic_3d_map])
+    delayed_filter            = TimerAction(period=7.0, actions=[scan_filter])
+    delayed_ultrasonic_fusion = TimerAction(period=9.0, actions=[ultrasonic_fusion])
+    delayed_ultrasonic_3d_map = TimerAction(period=11.0, actions=[ultrasonic_3d_map])
+    delayed_octomap_server    = TimerAction(period=15.0, actions=[octomap_server])
 
     return LaunchDescription([
         DeclareLaunchArgument('use_sim_time', default_value='true'),
@@ -131,4 +142,5 @@ def generate_launch_description():
         delayed_filter,
         delayed_ultrasonic_fusion,
         delayed_ultrasonic_3d_map,
+        delayed_octomap_server
     ])
