@@ -4,7 +4,8 @@ set -e
 source /opt/ros/jazzy/setup.bash
 source ~/harmonic_ws/install/setup.bash
 
-echo "Killing the foregoers..."
+
+echo "Killing every precedent process just in case..."
 pkill -f '[r]os2 launch mobile_robot'     || true
 pkill -f '[g]z sim'                       || true
 pkill -f '[p]arameter_bridge'             || true

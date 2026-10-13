@@ -4,7 +4,7 @@ set -e
 source /opt/ros/jazzy/setup.bash
 source ~/harmonic_ws/install/setup.bash
 
-echo "Killing the foregoers..."
+echo "Killing every precedent process just in case..."
 pkill -f '[r]os2 launch mobile_robot'     || true
 pkill -f '[g]z sim'                       || true
 pkill -f '[p]arameter_bridge'             || true
@@ -14,7 +14,7 @@ pkill -f '[s]can_to_scan_filter_chain'    || true
 pkill -f '[u]ltrasonic_fusion_node'       || true
 pkill -f '[s]lam_toolbox'                 || true
 pkill -f '[r]viz2'                        || true
-sleep 3
+sleep 2
 
 #echo "Killing the obstinates..."
 #pkill -9 -f '[g]z sim'                    || true
