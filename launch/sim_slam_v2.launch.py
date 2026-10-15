@@ -82,7 +82,7 @@ def generate_launch_description():
     )
 
     # ====================== TIMING ======================
-    delayed_rviz2  = TimerAction(period=5.0,  actions=[rviz2])
+    delayed_rviz2  = TimerAction(period=3.0,  actions=[rviz2])
 
     return LaunchDescription([
         DeclareLaunchArgument('use_sim_time', default_value='true'),

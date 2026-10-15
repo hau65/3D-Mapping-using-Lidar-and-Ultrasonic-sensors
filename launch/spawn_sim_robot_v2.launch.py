@@ -122,10 +122,10 @@ def generate_launch_description():
     )
 
     delayed_spawn_entity      = TimerAction(period=5.0, actions=[spawn_entity])
-    delayed_filter            = TimerAction(period=7.0, actions=[scan_filter])
-    delayed_ultrasonic_fusion = TimerAction(period=9.0, actions=[ultrasonic_fusion])
-    delayed_ultrasonic_3d_map = TimerAction(period=11.0, actions=[ultrasonic_3d_map])
-    delayed_octomap_server    = TimerAction(period=15.0, actions=[octomap_server])
+    delayed_filter            = TimerAction(period=6.0, actions=[scan_filter])
+    delayed_ultrasonic_fusion = TimerAction(period=7.0, actions=[ultrasonic_fusion])
+    delayed_ultrasonic_3d_map = TimerAction(period=9.0, actions=[ultrasonic_3d_map])
+    delayed_octomap_server    = TimerAction(period=10.0, actions=[octomap_server])
 
     return LaunchDescription([
         DeclareLaunchArgument('use_sim_time', default_value='true'),

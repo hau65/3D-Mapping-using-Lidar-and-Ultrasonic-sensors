@@ -5,6 +5,7 @@ import rclpy
 from rclpy.node import Node
 from sensor_msgs.msg import LaserScan, Range, PointCloud2, PointField
 from std_msgs.msg import Header
+from collections import deque
 
 WHEEL_RADIUS = 0.08255
 
@@ -35,7 +36,7 @@ class Ultrasonic3DMapNode(Node):
     SENSOR_X_OFFSET      = 0.35   # m — offset sensor từ base_footprint
     LIDAR_X_OFFSET       = 0.257   # m — offset lidar từ base_footprint
     LIDAR_Z_OFFSET       = 0.075  # m — offset lidar từ base_footprint 
-
+    FILTER_WINDOW        = 5
 
     def __init__(self):
         super().__init__('ultrasonic_3d_map_node')
@@ -47,6 +48,7 @@ class Ultrasonic3DMapNode(Node):
             'us_bot_left',    'us_bot_right',
         ]
 
+        self.buffers       = {n: deque(maxlen=self.FILTER_WINDOW) for n in self.sensor_names}
         self.sensor_angles = {n: math.radians(0) for n in self.sensor_names}
         self.points = []
 
@@ -75,27 +77,35 @@ class Ultrasonic3DMapNode(Node):
             x = -(dist * math.cos(angle)) + self.LIDAR_X_OFFSET
             y = -(dist * math.sin(angle))
             z = self.LIDAR_Z_OFFSET
-            self.points.append((x, y, z))
+            #self.points.append((x, y, z))
 
     # ── Ultrasonic sensors callback ───────────────────────────────────────────────────────
     def _range_cb(self, msg: Range, name: str):
-        dist = msg.range
-        if math.isinf(dist) or math.isnan(dist) or dist < msg.min_range or dist > msg.max_range:
-            return
+        if msg.min_range <= msg.range <= msg.max_range:
+                    self.buffers[name].append(msg.range)
+        elif msg.range >= msg.max_range:
+            self.buffers[name].append(float('inf'))
+        # < min_range → nhiễu cực gần, bỏ qua
 
+        if self.buffers[name]:
+            finite_vals = [v for v in self.buffers[name] if not math.isinf(v)]
+            filtered_dist = float(np.median(finite_vals)) if finite_vals else float('inf')
+            if math.isinf(filtered_dist):
+                return
+            
         spread = 8
         angle = self.sensor_angles[name]
+        
         for offset in range(-spread, spread + 1):
             a = angle + math.radians(offset * (15.0 / spread))
-            x = dist * math.cos(a) + self.SENSOR_X_OFFSET
-            y = dist * math.sin(a) + SENSOR_Y_OFFSET[name]
+            x = filtered_dist * math.cos(a) + self.SENSOR_X_OFFSET
+            y = filtered_dist * math.sin(a) + SENSOR_Y_OFFSET[name]
             z = SENSOR_HEIGHT[name]
+            
             self.points.append((x, y, z))
 
     # ── Publish PointCloud2 ───────────────────────────────────────────────────────
     def _publish_pointcloud(self):
-        if not self.points:
-            return
 
         header = Header()
         header.stamp = self.get_clock().now().to_msg()
