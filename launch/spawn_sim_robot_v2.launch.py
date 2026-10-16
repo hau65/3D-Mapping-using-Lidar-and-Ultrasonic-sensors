@@ -104,7 +104,7 @@ def generate_launch_description():
         executable='octomap_server_node',
         name='octomap_server',
         output='screen',
-        parameters=[{'frame_id': 'base_footprint'}],
+        parameters=[{'frame_id': 'map', 'use_sim_time': use_sim_time}],
         remappings=[('/cloud_in', '/ultrasonic_pointcloud')]
     )
 

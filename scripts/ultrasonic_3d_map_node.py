@@ -4,8 +4,9 @@ import numpy as np
 import rclpy
 from rclpy.node import Node
 from sensor_msgs.msg import LaserScan, Range, PointCloud2, PointField
-from std_msgs.msg import Header
 from collections import deque
+from tf2_ros import Buffer, TransformListener
+from tf2_sensor_msgs import do_transform_cloud
 
 WHEEL_RADIUS = 0.08255
 
@@ -31,13 +32,12 @@ SENSOR_Y_OFFSET = {
     'us_bot_right':     -0.17,
 }
 
+SENSOR_X_OFFSET      = 0.35   # m — offset sensor từ base_footprint
+LIDAR_X_OFFSET       = 0.257   # m — offset lidar từ base_footprint
+LIDAR_Z_OFFSET       = 0.075  # m — offset lidar từ base_footprint 
+FILTER_WINDOW        = 5
+
 class Ultrasonic3DMapNode(Node):
-
-    SENSOR_X_OFFSET      = 0.35   # m — offset sensor từ base_footprint
-    LIDAR_X_OFFSET       = 0.257   # m — offset lidar từ base_footprint
-    LIDAR_Z_OFFSET       = 0.075  # m — offset lidar từ base_footprint 
-    FILTER_WINDOW        = 5
-
     def __init__(self):
         super().__init__('ultrasonic_3d_map_node')
         
@@ -48,7 +48,11 @@ class Ultrasonic3DMapNode(Node):
             'us_bot_left',    'us_bot_right',
         ]
 
-        self.buffers       = {n: deque(maxlen=self.FILTER_WINDOW) for n in self.sensor_names}
+        # TF
+        self.tf_buffer = Buffer()
+        self.tf_listener = TransformListener(self.tf_buffer, self)
+
+        self.buffers       = {n: deque(maxlen=FILTER_WINDOW) for n in self.sensor_names}
         self.sensor_angles = {n: math.radians(0) for n in self.sensor_names}
         self.points = []
 
@@ -74,9 +78,9 @@ class Ultrasonic3DMapNode(Node):
 
             # calculate the position of the point in 3D space based on the lidar scan data
             angle = msg.angle_min + i * msg.angle_increment
-            x = -(dist * math.cos(angle)) + self.LIDAR_X_OFFSET
+            x = -(dist * math.cos(angle)) + LIDAR_X_OFFSET
             y = -(dist * math.sin(angle))
-            z = self.LIDAR_Z_OFFSET
+            z = LIDAR_Z_OFFSET
             #self.points.append((x, y, z))
 
     # ── Ultrasonic sensors callback ───────────────────────────────────────────────────────
@@ -86,30 +90,31 @@ class Ultrasonic3DMapNode(Node):
         elif msg.range >= msg.max_range:
             self.buffers[name].append(float('inf'))
         # < min_range → nhiễu cực gần, bỏ qua
-
+        
+        filtered_dist = float('inf')
         if self.buffers[name]:
             finite_vals = [v for v in self.buffers[name] if not math.isinf(v)]
             filtered_dist = float(np.median(finite_vals)) if finite_vals else float('inf')
-            if math.isinf(filtered_dist):
-                return
+        
+        if math.isinf(filtered_dist):
+            return
             
         spread = 8
         angle = self.sensor_angles[name]
         
         for offset in range(-spread, spread + 1):
             a = angle + math.radians(offset * (15.0 / spread))
-            x = filtered_dist * math.cos(a) + self.SENSOR_X_OFFSET
+
+            x = filtered_dist * math.cos(a) + SENSOR_X_OFFSET
             y = filtered_dist * math.sin(a) + SENSOR_Y_OFFSET[name]
             z = SENSOR_HEIGHT[name]
-            
             self.points.append((x, y, z))
+
 
     # ── Publish PointCloud2 ───────────────────────────────────────────────────────
     def _publish_pointcloud(self):
-
-        header = Header()
-        header.stamp = self.get_clock().now().to_msg()
-        header.frame_id = 'base_footprint'
+        if not self.points:
+            return
 
         fields = [
             PointField(name='x', offset=0, datatype=PointField.FLOAT32, count=1),
@@ -118,7 +123,8 @@ class Ultrasonic3DMapNode(Node):
         ]   
 
         cloud               = PointCloud2()
-        cloud.header        = header
+        cloud.header.stamp = self.get_clock().now().to_msg()
+        cloud.header.frame_id = 'map'
         cloud.height        = 1
         cloud.width         = len(self.points)
         cloud.fields        = fields
@@ -128,8 +134,12 @@ class Ultrasonic3DMapNode(Node):
         cloud.is_dense      = True
         cloud.data          = np.array(self.points, dtype=np.float32).tobytes()
 
+        transform = self.tf_buffer.lookup_transform('map', 'base_footprint', rclpy.time.Time())   
+        cloud = do_transform_cloud(cloud, transform)
+
         self.pointCloud2_pub.publish(cloud)
         self.points = []
+
 
 def main(args=None):
     rclpy.init(args=args)
