@@ -5,8 +5,7 @@ import rclpy
 from rclpy.node import Node
 from sensor_msgs.msg import LaserScan, Range, PointCloud2, PointField
 from collections import deque
-from tf2_ros import Buffer, TransformListener
-from tf2_sensor_msgs import do_transform_cloud
+from scipy.spatial import cKDTree
 
 WHEEL_RADIUS = 0.08255
 
@@ -36,6 +35,7 @@ SENSOR_X_OFFSET      = 0.35   # m — offset sensor từ base_footprint
 LIDAR_X_OFFSET       = 0.257   # m — offset lidar từ base_footprint
 LIDAR_Z_OFFSET       = 0.075  # m — offset lidar từ base_footprint 
 FILTER_WINDOW        = 5
+SENSOR_MAX_RANGE     = 1.0
 
 class Ultrasonic3DMapNode(Node):
     def __init__(self):
@@ -47,10 +47,6 @@ class Ultrasonic3DMapNode(Node):
             'us_mid_2_left',  'us_mid_2_right',
             'us_bot_left',    'us_bot_right',
         ]
-
-        # TF
-        self.tf_buffer = Buffer()
-        self.tf_listener = TransformListener(self.tf_buffer, self)
 
         self.buffers       = {n: deque(maxlen=FILTER_WINDOW) for n in self.sensor_names}
         self.sensor_angles = {n: math.radians(0) for n in self.sensor_names}
@@ -69,6 +65,33 @@ class Ultrasonic3DMapNode(Node):
         self.pointCloud2_pub = self.create_publisher(PointCloud2, '/ultrasonic_pointcloud', 10)
 
         self.create_timer(0.1, self._publish_pointcloud)
+
+    @staticmethod
+    def _cluster(points, eps=0.15, min_samples=5):
+        pts = np.asarray(points, dtype=np.float32)
+        if len(pts) == 0:
+            return pts, np.empty(0, dtype=np.int32)
+
+        tree = cKDTree(pts)
+        neighbors = tree.query_ball_point(pts, r=eps)   # points within eps of each point
+        labels = np.full(len(pts), -1, dtype=np.int32)  # -1 = noise
+        cluster_id = 0
+
+        for i, nb in enumerate(neighbors):
+            if labels[i] != -1 or len(nb) < min_samples:
+                continue                                # not a core point yet
+            # flood fill: grow cluster from core point i
+            labels[i] = cluster_id
+            stack = list(nb)
+            while stack:
+                j = stack.pop()
+                if labels[j] == -1:
+                    labels[j] = cluster_id
+                    if len(neighbors[j]) >= min_samples:  # border point extends cluster
+                        stack.extend(k for k in neighbors[j] if labels[k] == -1)
+            cluster_id += 1
+
+        return pts, labels
     
     #  ── Lidar callback ─────────────────────────────────────────────
     def lidar_callback(self, msg):
@@ -91,13 +114,11 @@ class Ultrasonic3DMapNode(Node):
             self.buffers[name].append(float('inf'))
         # < min_range → nhiễu cực gần, bỏ qua
         
-        filtered_dist = float('inf')
-        if self.buffers[name]:
-            finite_vals = [v for v in self.buffers[name] if not math.isinf(v)]
-            filtered_dist = float(np.median(finite_vals)) if finite_vals else float('inf')
-        
-        if math.isinf(filtered_dist):
+        if (not self.buffers[name]):
             return
+
+        finite_vals = [v for v in self.buffers[name] if not math.isinf(v)]
+        filtered_dist = float(np.median(finite_vals)) if finite_vals else SENSOR_MAX_RANGE
             
         spread = 8
         angle = self.sensor_angles[name]
@@ -110,32 +131,41 @@ class Ultrasonic3DMapNode(Node):
             z = SENSOR_HEIGHT[name]
             self.points.append((x, y, z))
 
-
     # ── Publish PointCloud2 ───────────────────────────────────────────────────────
     def _publish_pointcloud(self):
         if not self.points:
             return
 
+        #clustering
+        pts, labels = self._cluster(self.points, eps=0.15, min_samples=5)
+        keep = labels != -1
+        pts, labels = pts[keep], labels[keep]
+        if len(pts) == 0:
+            self.points = []
+            return
+        
         fields = [
             PointField(name='x', offset=0, datatype=PointField.FLOAT32, count=1),
             PointField(name='y', offset=4, datatype=PointField.FLOAT32, count=1),
             PointField(name='z', offset=8, datatype=PointField.FLOAT32, count=1),
+            PointField(name='cluster', offset=12, datatype=PointField.INT32, count=1),
         ]   
+
+        arr = np.zeros(len(pts), dtype=[('x', '<f4'), ('y', '<f4'),
+                                ('z', '<f4'), ('cluster', '<i4')])
+        arr['x'], arr['y'], arr['z'], arr['cluster'] = pts[:, 0], pts[:, 1], pts[:, 2], labels
 
         cloud               = PointCloud2()
         cloud.header.stamp = self.get_clock().now().to_msg()
-        cloud.header.frame_id = 'map'
+        cloud.header.frame_id = 'base_footprint'
         cloud.height        = 1
-        cloud.width         = len(self.points)
+        cloud.width         = len(pts)
         cloud.fields        = fields
-        cloud.point_step    = 12 
-        cloud.row_step      = 12 * len(self.points)
+        cloud.point_step    = 16
+        cloud.row_step      = 16 * len(pts)
         cloud.is_bigendian  = False
         cloud.is_dense      = True
-        cloud.data          = np.array(self.points, dtype=np.float32).tobytes()
-
-        transform = self.tf_buffer.lookup_transform('map', 'base_footprint', rclpy.time.Time())   
-        cloud = do_transform_cloud(cloud, transform)
+        cloud.data = arr.tobytes() 
 
         self.pointCloud2_pub.publish(cloud)
         self.points = []
