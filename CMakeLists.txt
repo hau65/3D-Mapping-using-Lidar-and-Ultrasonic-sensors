@@ -1,9 +1,9 @@
 cmake_minimum_required(VERSION 3.8)
 project(mobile_robot)
 
-# Default to C++14 or C++17 depending on Foxy standards
+# Default to C++14 or C++17 depending on Harmonic standards
 if(NOT CMAKE_CXX_STANDARD)
-  set(CMAKE_CXX_STANDARD 14)
+  set(CMAKE_CXX_STANDARD 17)
 endif()
 
 # Compiler warnings to ensure code quality and safety standards
@@ -13,20 +13,29 @@ endif()
 
 # Dependencies
 find_package(ament_cmake REQUIRED)
-# find_package(rclcpp REQUIRED)       # Uncomment if adding C++ nodes later
+find_package(rclcpp REQUIRED)
+find_package(octomap REQUIRED)
+find_package(octomap_msgs REQUIRED)
+find_package(visualization_msgs REQUIRED)
+find_package(nav_msgs REQUIRED)
 # find_package(gazebo_ros REQUIRED)   # Uncomment if linking against Gazebo C++ API
 
+# C++ node: US and lidar octomaps fusion (Bayes log-odds)
+add_executable(octomap_fusion_node octomap_fusion_node.cpp)
+ament_target_dependencies(octomap_fusion_node
+  rclcpp
+  octomap_msgs
+  visualization_msgs
+  nav_msgs
+)
+target_link_libraries(octomap_fusion_node octomap)
 
-# 1. Install directories: Launch files, URDF models, maps, configs, and worlds.
-# These assets are installed to: install/share/mobile_robot/
 install(
   DIRECTORY launch urdf maps config worlds meshes scripts
   DESTINATION share/${PROJECT_NAME}
 )
 
-# 2. Install Python executables/scripts.
-# These are installed to: install/lib/mobile_robot/
-# Users can invoke them via: ros2 run mobile_robot <script_name>
+# Python
 install(
   PROGRAMS
     scripts/robot_teleop.py
@@ -41,7 +50,14 @@ install(
     scripts/ultrasonic_fusion_node_v3.py
     scripts/endurance_test.py
     scripts/ultrasonic_3d_map_node.py
+    scripts/lidar_cloud_node.py
     
+  DESTINATION lib/${PROJECT_NAME}
+)
+
+# C++
+install(
+  TARGETS octomap_fusion_node
   DESTINATION lib/${PROJECT_NAME}
 )
 

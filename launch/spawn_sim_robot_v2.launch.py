@@ -98,11 +98,15 @@ def generate_launch_description():
         parameters=[{'use_sim_time': use_sim_time}]
     )
 
-    # ====================== OCTOMAP SERVER ======================
-    octomap_server = Node(
+    # ====================== OCTOMAP SERVER (ULTRASONIC-ONLY MAP) ======================
+    # Namespace riêng → topics: /octomap_ultrasonic/free_cells_vis_array, ...
+    # sensor_model.max_range = 1.30: điểm no-echo (1.0 m từ sensor, D ≥ ~1.32 từ
+    # base_footprint) > 1.30 → free ray; hit thật (D ≤ 1.30) → occupied endpoint.
+    octomap_ultrasonic = Node(
         package='octomap_server',
         executable='octomap_server_node',
-        name='octomap_server',
+        name='octomap_ultrasonic',
+        namespace='octomap_ultrasonic',
         output='screen',
         parameters=[{
             'frame_id': 'map', 
@@ -110,7 +114,47 @@ def generate_launch_description():
             'sensor_model.max_range': 1.30,
             'publish_free_space': True,
             }],
-        remappings=[('/cloud_in', '/ultrasonic_pointcloud')]
+        remappings=[('cloud_in', '/ultrasonic_pointcloud')]
+    )
+
+    # ====================== OCTOMAP SERVER (LIDAR-ONLY MAP) ======================
+    # no-echo at 15.5 m (D > 15.0)
+    octomap_lidar = Node(
+        package='octomap_server',
+        executable='octomap_server_node',
+        name='octomap_lidar',
+        namespace='octomap_lidar',
+        output='screen',
+        parameters=[{
+            'frame_id': 'map',
+            'use_sim_time': use_sim_time,
+            'sensor_model.max_range': 15.0,
+            'publish_free_space': True,
+            'color.r': 0.0, 'color.g': 0.0, 'color.b': 1.0, 'color.a': 1.0,
+            }],
+        remappings=[('cloud_in', '/lidar_pointcloud')]
+    )
+
+    # ====================== LIDAR 3D CLOUD ======================
+    lidar_cloud = Node(
+        package='mobile_robot',
+        executable='lidar_cloud_node.py',
+        name='lidar_cloud_node',
+        output='screen',
+        parameters=[{'use_sim_time': use_sim_time}]
+    )
+
+    # ====================== OCTOMAP FUSION (Bayes log-odds) ======================
+    octomap_fusion = Node(
+        package='mobile_robot',
+        executable='octomap_fusion_node',
+        name='octomap_fusion_node',
+        output='screen',
+        parameters=[{
+            'use_sim_time': use_sim_time,
+            'frame_id': 'map',
+            'publish_free_space': True,
+            }]
     )
 
     # ====================== Spawn Entity (ros_gz_sim create) ======================
@@ -126,11 +170,14 @@ def generate_launch_description():
         ]
     )
 
-    delayed_spawn_entity      = TimerAction(period=5.0, actions=[spawn_entity])
-    delayed_filter            = TimerAction(period=6.0, actions=[scan_filter])
-    delayed_ultrasonic_fusion = TimerAction(period=7.0, actions=[ultrasonic_fusion])
-    delayed_ultrasonic_3d_map = TimerAction(period=9.0, actions=[ultrasonic_3d_map])
-    delayed_octomap_server    = TimerAction(period=10.0, actions=[octomap_server])
+    delayed_spawn_entity       = TimerAction(period=5.0, actions=[spawn_entity])
+    delayed_filter             = TimerAction(period=6.0, actions=[scan_filter])
+    delayed_lidar_cloud        = TimerAction(period=6.0, actions=[lidar_cloud])
+    delayed_ultrasonic_fusion  = TimerAction(period=7.0, actions=[ultrasonic_fusion])
+    delayed_ultrasonic_3d_map  = TimerAction(period=10.0, actions=[ultrasonic_3d_map])
+    delayed_octomap_ultrasonic = TimerAction(period=13.0, actions=[octomap_ultrasonic])
+    delayed_octomap_lidar      = TimerAction(period=13.0, actions=[octomap_lidar])
+    delayed_octomap_fusion     = TimerAction(period=15.0, actions=[octomap_fusion])
 
     return LaunchDescription([
         DeclareLaunchArgument('use_sim_time', default_value='true'),
@@ -145,7 +192,10 @@ def generate_launch_description():
 
         delayed_spawn_entity,
         delayed_filter,
+        delayed_lidar_cloud,
         delayed_ultrasonic_fusion,
         delayed_ultrasonic_3d_map,
-        delayed_octomap_server
+        delayed_octomap_ultrasonic,
+        delayed_octomap_lidar,
+        delayed_octomap_fusion
     ])
