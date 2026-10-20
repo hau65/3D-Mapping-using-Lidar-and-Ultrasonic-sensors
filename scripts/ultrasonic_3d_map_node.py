@@ -3,7 +3,7 @@ import math
 import numpy as np
 import rclpy
 from rclpy.node import Node
-from sensor_msgs.msg import LaserScan, Range, PointCloud2, PointField
+from sensor_msgs.msg import Range, PointCloud2, PointField
 from collections import deque
 from scipy.spatial import cKDTree
 
@@ -32,8 +32,6 @@ SENSOR_Y_OFFSET = {
 }
 
 SENSOR_X_OFFSET      = 0.35   # m — offset sensor từ base_footprint
-LIDAR_X_OFFSET       = 0.257   # m — offset lidar từ base_footprint
-LIDAR_Z_OFFSET       = 0.075  # m — offset lidar từ base_footprint 
 FILTER_WINDOW        = 5
 SENSOR_MAX_RANGE     = 1.0
 
@@ -60,8 +58,6 @@ class Ultrasonic3DMapNode(Node):
                 Range, f'/ultrasonic/{name}',
                 lambda msg, n=name: self._range_cb(msg, n), 10)
             
-        self.create_subscription(LaserScan, '/scan', self.lidar_callback, 10)
-
         self.pointCloud2_pub = self.create_publisher(PointCloud2, '/ultrasonic_pointcloud', 10)
 
         self.create_timer(0.1, self._publish_pointcloud)
@@ -93,19 +89,6 @@ class Ultrasonic3DMapNode(Node):
 
         return pts, labels
     
-    #  ── Lidar callback ─────────────────────────────────────────────
-    def lidar_callback(self, msg):
-        for i, dist in enumerate(msg.ranges):
-            if math.isinf(dist) or math.isnan(dist) or dist < msg.range_min or dist > msg.range_max:
-                continue
-
-            # calculate the position of the point in 3D space based on the lidar scan data
-            angle = msg.angle_min + i * msg.angle_increment
-            x = -(dist * math.cos(angle)) + LIDAR_X_OFFSET
-            y = -(dist * math.sin(angle))
-            z = LIDAR_Z_OFFSET
-            #self.points.append((x, y, z))
-
     # ── Ultrasonic sensors callback ───────────────────────────────────────────────────────
     def _range_cb(self, msg: Range, name: str):
         if msg.min_range <= msg.range <= msg.max_range:
