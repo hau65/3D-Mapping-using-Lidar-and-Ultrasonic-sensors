@@ -35,8 +35,6 @@ def generate_launch_description():
     )
 
     # ====================== SLAM TOOLBOX (lifecycle) ======================
-    # Jazzy slam_toolbox is a lifecycle node: params are applied on 'configure'
-    # and mapping starts on 'activate', so both transitions are emitted here.
     slam_toolbox = LifecycleNode(
         package='slam_toolbox',
         executable='async_slam_toolbox_node',
