@@ -62,6 +62,7 @@ class Ultrasonic3DMapNode(Node):
 
         self.create_timer(0.1, self._publish_pointcloud)
 
+    # ── Clustering ───────────────────────────────────────────────────────────────────────────
     @staticmethod
     def _cluster(points, eps=0.15, min_samples=5):
         pts = np.asarray(points, dtype=np.float32)
