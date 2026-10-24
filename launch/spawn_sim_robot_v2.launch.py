@@ -98,10 +98,8 @@ def generate_launch_description():
         parameters=[{'use_sim_time': use_sim_time}]
     )
 
-    # ====================== OCTOMAP SERVER (ULTRASONIC-ONLY MAP) ======================
-    # Namespace riêng → topics: /octomap_ultrasonic/free_cells_vis_array, ...
-    # sensor_model.max_range = 1.30: điểm no-echo (1.0 m từ sensor, D ≥ ~1.32 từ
-    # base_footprint) > 1.30 → free ray; hit thật (D ≤ 1.30) → occupied endpoint.
+    # ====================== OCTOMAP SERVER (ULTRASONIC) ======================
+    # no-echo at 1.3 m (D > 1.30)
     octomap_ultrasonic = Node(
         package='octomap_server',
         executable='octomap_server_node',
@@ -117,7 +115,7 @@ def generate_launch_description():
         remappings=[('cloud_in', '/ultrasonic_pointcloud')]
     )
 
-    # ====================== OCTOMAP SERVER (LIDAR-ONLY MAP) ======================
+    # ====================== OCTOMAP SERVER (LIDAR) ======================
     # no-echo at 15.5 m (D > 15.0)
     octomap_lidar = Node(
         package='octomap_server',
