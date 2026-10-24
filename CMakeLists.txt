@@ -45,8 +45,8 @@ install(
     scripts/checkpoint_cmd_v2.py
     #scripts/frontier_explorer.py # Unused
     scripts/map_saver_service.py
-    #scripts/ultrasonic_fusion_node.py
-    #scripts/ultrasonic_fusion_node_v2.py
+    #scripts/ultrasonic_fusion_node.py # Deprecated
+    #scripts/ultrasonic_fusion_node_v2.py # Deprecated
     scripts/ultrasonic_fusion_node_v3.py
     scripts/endurance_test.py
     scripts/ultrasonic_3d_map_node.py
